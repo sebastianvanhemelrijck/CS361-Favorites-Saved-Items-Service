@@ -40,6 +40,35 @@ def test_saving_duplicate_item_is_handled(client):
     assert response.json["error"]["code"] == "DUPLICATE_ITEM"
 
 
+def test_same_source_id_is_separate_for_each_main_program(client):
+    first = {
+        "source": "StudyPlanner",
+        "source_id": "item-1",
+        "name": "Review notes",
+    }
+    second = {
+        "source": "HabitTracker",
+        "source_id": "item-1",
+        "name": "Morning walk",
+    }
+
+    assert client.post("/favorites", json=first).status_code == 201
+    assert client.post("/favorites", json=second).status_code == 201
+    assert client.get("/favorites?source=StudyPlanner").json["count"] == 1
+    assert client.get("/favorites?source=HabitTracker").json["count"] == 1
+
+
+def test_configured_main_program_origin_is_allowed(client, monkeypatch):
+    monkeypatch.setenv(
+        "MAIN_PROGRAM_ORIGINS",
+        "http://localhost:3000,http://localhost:4173",
+    )
+
+    response = client.get("/health", headers={"Origin": "http://localhost:3000"})
+
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+
+
 @pytest.mark.skip(reason="teammate follow-up: add the 50-item restart acceptance test")
 def test_reliability_50_items_survive_restart():
     """Verify all saved fields after loading 50 items from a fresh process."""
