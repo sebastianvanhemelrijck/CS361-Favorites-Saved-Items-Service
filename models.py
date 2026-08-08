@@ -17,12 +17,23 @@ REQUIRED_FIELDS = []
 
 def validate_new_items(data):
     """
+    Validate payload for a new item before saving it.
 
+    TODO:
+    - Check 'data' is a dict/JSON object
+    - Check that all fields in REQUIRED_FIELDS are present
+    - Return (True, None) if valid, or (False, "error message") if not,
+      so app.py can decide how to respond (e.g. 400 Bad Request)
     """
     pass
 
 def is_duplicate(new_item, existing_items):
     """
+    Determine whether an item is already saved.
 
+    TODO:
+    - Decide what makes two items the same (i.e url or unique identifier)
+    - Return True if a matching item already exists in existing_items,
+      False otherwise
     """
     pass
