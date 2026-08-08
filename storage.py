@@ -1,95 +1,96 @@
-# Contributors: Craig Harker & Sebastian Van Hemelrijck Noya
+# Name: Craig Harker and Sebastian Van Hemelrijck Noya
 # Course: CS361 - Software Engineering 1
 # Assignment: Assignment 9
 # Due Date: 8/10/26
-# Description:
-    # Persistence layer for Favorite/Saved Items microservice.
-    # Handles all reading from and writing to favorites.json, so app.py never
-    # has to deal with file I/O directly.
-    
-    # The pattern used here: load the file into memory, modify it, write the
-    # whole thing back.
+# Description: JSON storage for saved items and favorites
 
 import json
 import os
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 
-DATA_FILE = "favorites.json"
+DATA_FILE = Path(
+    os.environ.get("FAVORITES_DATA_FILE", Path(__file__).with_name("favorites.json"))
+)
+
 
 def load_items():
     """
-    Load all saved items from favorites.json.
+    Load every saved item.
 
-    TODO:
-    - If DATA_FILE doesn't exist yet (first run), return an empty list
-      (and possibly create the file at that point)
-    - Otherwise, open the file and json.load() it, returning the list of items
-    - Consider what happens if the file exists but is empty/corrupted
+    A missing or empty file means nothing has been saved yet. Bad JSON raises an
+    error so existing data is not silently replaced.
     """
-    pass
+    if not DATA_FILE.exists() or DATA_FILE.stat().st_size == 0:
+        return []
+    with DATA_FILE.open("r", encoding="utf-8") as data_file:
+        items = json.load(data_file)
+    if not isinstance(items, list):
+        raise ValueError("favorites data must contain a JSON list")
+    return items
+
 
 def save_items(items):
     """
-    Persist the full list of items to favorites.json.
+    Write the full saved item list.
 
-    Writes to a temp file first, then replaces the real data
-    file with os.replace().
-
-    TODO:
-    - Write 'items' as JSON to a temp file (e.g. favorites.json.tmp)
-    - Use os.replace() to move temp file over DATA_FILE
+    The new JSON is completed in a temporary file before it replaces the old
+    file. This keeps a partial write from damaging the saved list.
     """
-    pass
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = DATA_FILE.with_suffix(DATA_FILE.suffix + ".tmp")
+    with temp_file.open("w", encoding="utf-8") as output:
+        json.dump(items, output, indent=2)
+    os.replace(temp_file, DATA_FILE)
+
 
 def save_item(item):
     """
-    Add a new item to storage and return saved version (with an 
-    assigned id, pinned=False default, and a saved_at timestamp).
+    Add service-owned fields and save one item.
 
-    TODO:
-    - Load existing items via load_items()
-    - Generate a unique id for the new item (generate_id() below)
-    - Set default fields: "pinned": False, "saved_at": <timestamp>
-    - Append the new item to the list
-    - Call save_items() to persist
-    - Return the newly saved item (as a dict) so app.py can return it as JSON
+    The service creates the id, pin state, and save time even if the request
+    sends values with the same names.
     """
-    pass
+    items = load_items()
+    saved_item = {
+        **item,
+        "id": generate_id(),
+        "pinned": False,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    items.append(saved_item)
+    save_items(items)
+    return saved_item
+
 
 def get_all_items():
     """
-    Return all saved items, sorted with pinned items first.
+    Return favorites first and newer items first inside each group.
 
-    TODO:
-    - Load items via load_items()
-    - Sort so pinned items come before unpinned items. Within each group,
-      a consistent order (e.g. by saved_at) as a default.
-      Example:
-        sorted(items, key=lambda x: (not x["pinned"], x["saved_at"]))
-    - Return the sorted list
+    :return: sorted copy of every saved item
     """
-    pass
+    newest_first = sorted(
+        load_items(), key=lambda item: item.get("saved_at", ""), reverse=True
+    )
+    return sorted(newest_first, key=lambda item: not item.get("pinned", False))
 
-def pin_item(item_id):
-    """
-    Mark a specific item as pinned.
 
-    TODO:
-    - Load items via load_items()
-    - Find the item matching item_id
-    - If not found, decide how to signal that to app.py (e.g. return None,
-      or raise a custom exception, so app.py can return a 404)
-    - Set that item's "pinned" field to True
-    - Call save_items() to persist the change
-    - Return the updated item
+def pin_item(item_id, pinned=True):
     """
-    pass
+    Change the favorite state for one saved item.
+
+    :return: updated item or none when the id is unknown
+    """
+    items = load_items()
+    for item in items:
+        if item.get("id") == item_id:
+            item["pinned"] = bool(pinned)
+            save_items(items)
+            return item
+    return None
+
 
 def generate_id():
-    """
-    Generate a unique identifier for a new item.
-
-    TODO:
-    - Use uuid.uuid4() to generate unique identifiers.
-    """
+    """Create a unique id owned by the service."""
     return str(uuid.uuid4())
