@@ -6,6 +6,8 @@
 
 REQUIRED_FIELDS = ["source_id", "name"]
 
+EDITABLE_FIELDS = ["name", "description", "category", "url"]
+
 
 def validate_new_item(data):
     """
@@ -57,3 +59,22 @@ def is_duplicate(new_item, existing_items):
         and item.get("source_id") == source_id
         for item in existing_items
     )
+
+def validate_update(data):
+    """
+    Checks that the updates requested are a field that we allow to be
+    updated. Returns reject messages if not editable else returns updates.
+
+    :param data: data to be updated
+    :return: dict of updates completed
+    """
+    if not isinstance(data, dict) or not data:
+        return None, "The request body must be a non-empty JSON object."
+    updates = {}
+    for field, value in data.items():
+        if field not in EDITABLE_FIELDS:
+            return None, f"{field} cannot be updated."
+        if not isinstance(value, str):
+            return None, f"{field} must be a string."
+        updates[field] = value.strip()
+    return updates, None

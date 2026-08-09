@@ -13,10 +13,16 @@ The service uses a REST API with JSON at `http://127.0.0.1:5103` by default.
 | `POST /favorites` | Save an item from a Main Program |
 | `GET /favorites?source={program}` | List one Main Program's saved items with pinned items first |
 | `PATCH /favorites/{id}/pin` | Pin an item, or send `{"pinned": false}` to unpin it |
+| `PATCH /favorites/{id}` | Edit`name`,`description`, `category`, or `url` on a saved item to unpin it |
+| `DELETE /favorites/{id}` | Remove a saved item |
 
 New items require `source_id` and `name`. `source`, `description`, `category`,
 `url`, and a JSON `metadata` object are optional. Duplicate `source` and
 `source_id` pairs return HTTP 409.
+
+`GET /favorites` is paginated: `page` defaults to 1 and `page_size` defaults to 20. The
+response includes `total` (items matching the filter across all pages) alongside `count`
+(items in this page) so a Main Program can page through the full list.
 
 Each caller should send its own stable `source` name, such as `StudyPlanner`,
 `HabitTracker`, or `PrepTrack`. This keeps identifiers and saved lists separate
@@ -46,8 +52,3 @@ Run the automated tests with `python -m pytest -q`.
 - Save an item as a favorite.
 - Pin an urgent or important item at the top of the saved-items list.
 
-## Remaining shared work
-
-The required save, list, pin, persistence, validation, and shared cross-program
-contract are implemented. Delete/update operations, pagination, and the skipped
-50/100-item acceptance tests remain available for another teammate.

@@ -68,12 +68,31 @@ def get_favorites():
     Return saved items with favorites first.
 
     The optional source query keeps different Main Programs separate.
+    Results are paginated with a default size of 20
     """
     items = storage.get_all_items()
     source = request.args.get("source", "").strip().casefold()
     if source:
         items = [item for item in items if item.get("source", "").casefold() == source]
-    return jsonify({"count": len(items), "items": items})
+
+    page = request.args.get("page", 1, type=int)
+    page_size = request.args.get("page_size", 20, type=int)
+    if page < 1 or page_size < 1:
+        return jsonify(
+            {"error": {"code": "INVALID_PAGE", "message": "page and page_size must be positive integers."}}
+        ), 400
+
+    total = len(items)
+    start = (page - 1) * page_size
+    page_items = items[start:start + page_size]
+
+    return jsonify({
+        "count": len(page_items),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": page_items,
+    })
 
 
 @app.route("/favorites/<item_id>/pin", methods=["PATCH"])
@@ -103,6 +122,31 @@ def pin_favorite(item_id):
                     "message": "The saved item was not found.",
                 }
             }
+        ), 404
+    return jsonify(updated)
+
+
+@app.route("/favorites/<item_id>", methods=["DELETE"])
+def delete_favorite(item_id):
+    """Remove a saved item entirely."""
+    deleted = storage.delete_item(item_id)
+    if not deleted:
+        return jsonify(
+            {"error": {"code": "NOT_FOUND", "message": "The saved item was not found."}}
+        ), 404
+    return "", 204
+
+
+@app.route("/favorites/<item_id>", methods=["PATCH"])
+def update_favorite(item_id):
+    """Edit one or more fields of a saved item (not source_id, source, or id)."""
+    updates, error = validate_update(request.get_json(silent=True))
+    if error:
+        return jsonify({"error": {"code": "INVALID_UPDATE", "message": error}}), 400
+    updated = storage.update_item(item_id, updates)
+    if updated is None:
+        return jsonify(
+            {"error": {"code": "NOT_FOUND", "message": "The saved item was not found."}}
         ), 404
     return jsonify(updated)
 

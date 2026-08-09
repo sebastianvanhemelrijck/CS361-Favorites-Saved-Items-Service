@@ -91,6 +91,30 @@ def pin_item(item_id, pinned=True):
     return None
 
 
+def update_item(item_id, updates):
+    items = load_items()
+    for item in items:
+        if item.get("id") == item_id:
+            item.update(updates)
+            save_items(items)
+            return item
+    return None
+
+
+def delete_item(item_id):
+    """
+    Remove a saved item by id.
+
+    :return: True if an item was removed, False if the id didn't exist
+    """
+    items = load_items()
+    remaining = [item for item in items if item.get("id") != item_id]
+    if len(remaining) == len(items):
+        return False
+    save_items(remaining)
+    return True
+
+
 def generate_id():
     """Create a unique id owned by the service."""
     return str(uuid.uuid4())
