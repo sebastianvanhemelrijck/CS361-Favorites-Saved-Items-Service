@@ -8,7 +8,7 @@ import os
 
 from flask import Flask, jsonify, request
 
-from models import is_duplicate, validate_new_item
+from models import is_duplicate, validate_new_item, validate_update
 import storage
 
 app = Flask(__name__)

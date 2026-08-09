@@ -250,17 +250,18 @@ def test_pagination_returns_requested_page_size(client):
  
  
 def test_pagination_invalid_page_returns_400(client):
-    """
-    Given a user has 100 saved items, when the Main Program requests the
-    list, then the service returns the sorted list within one second.
-
-    A page number below 1 is rejected.
-    """
+    """A page number below 1 is rejected."""
     response = client.get("/favorites?page=0")
  
     assert response.status_code == 400
     assert response.json["error"]["code"] == "INVALID_PAGE"
  
+ 
+def test_performance_100_items_sorted_within_one_second(client):
+    """
+    Given a user has 100 saved items, when the Main Program requests the
+    list, then the service returns the sorted list within one second.
+    """
     for i in range(100):
         response = client.post("/favorites", json={
             "source": "PrepTrack",
