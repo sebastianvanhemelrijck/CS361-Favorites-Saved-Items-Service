@@ -4,6 +4,7 @@
 # Due Date: 8/10/26
 # Description: Tests for the favorites and saved items REST API
 
+import importlib
 import time
 
 import pytest
@@ -64,7 +65,37 @@ def test_save_item_non_json_body_returns_400(client):
     assert response.json["error"]["code"] == "INVALID_ITEM"
 
 
-def test_reliability_50_items_surivive_restart(client):
+def test_same_source_id_is_separate_for_each_main_program(client):
+    first = {
+        "source": "StudyPlanner",
+        "source_id": "item-1",
+        "name": "Review notes",
+    }
+    second = {
+        "source": "HabitTracker",
+        "source_id": "item-1",
+        "name": "Morning walk",
+    }
+
+    assert client.post("/favorites", json=first).status_code == 201
+    assert client.post("/favorites", json=second).status_code == 201
+    assert client.get("/favorites?source=StudyPlanner").json["count"] == 1
+    assert client.get("/favorites?source=HabitTracker").json["count"] == 1
+
+
+def test_configured_main_program_origin_is_allowed(client, monkeypatch):
+    monkeypatch.setenv(
+        "MAIN_PROGRAM_ORIGINS",
+        "http://localhost:3000,http://localhost:4173",
+    )
+
+    response = client.get("/health", headers={"Origin": "http://localhost:3000"})
+
+    assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+    assert "DELETE" in response.headers["Access-Control-Allow-Methods"]
+
+
+def test_reliability_50_items_survive_restart(client, monkeypatch):
     """
     Given 50 saved test items, when the service is restarted and the items
     are requested again, then all 50 items are returned with correct info.
@@ -79,12 +110,14 @@ def test_reliability_50_items_surivive_restart(client):
         assert response.status_code == 201
         saved_items.append(response.json)
  
-    # storage.py keeps no in-memory state - every call reads favorites.json
-    # from disk. Calling load_items() again reproduces exactly what a
-    # freshly restarted process would see. This exercises the same code
-    # path a real restart would.
-    reloaded = storage.load_items()
- 
+    # reload storage from the saved file like a restarted service would
+    monkeypatch.setenv("FAVORITES_DATA_FILE", str(storage.DATA_FILE))
+    importlib.reload(storage)
+    restarted_client = app.test_client()
+    reloaded = restarted_client.get(
+        "/favorites?source=PrepTrack&page_size=50"
+    ).json["items"]
+
     assert len(reloaded) == 50
     saved_ids = {item["id"] for item in saved_items}
     reloaded_ids = {item["id"] for item in reloaded}
@@ -204,6 +237,18 @@ def test_update_item_empty_body_returns_400(client):
  
     assert response.status_code == 400
     assert response.json["error"]["code"] == "INVALID_UPDATE"
+
+
+def test_update_item_rejects_empty_name(client):
+    """A saved item still needs a non-empty name after an update."""
+    saved = client.post("/favorites", json={
+        "source": "PrepTrack", "source_id": "1", "name": "Water"
+    }).json
+
+    response = client.patch(f"/favorites/{saved['id']}", json={"name": ""})
+
+    assert response.status_code == 400
+    assert response.json["error"]["code"] == "INVALID_UPDATE"
  
  
 def test_delete_item(client):
@@ -256,12 +301,6 @@ def test_pagination_invalid_page_returns_400(client):
     assert response.status_code == 400
     assert response.json["error"]["code"] == "INVALID_PAGE"
  
- 
-def test_performance_100_items_sorted_within_one_second(client):
-    """
-    Given a user has 100 saved items, when the Main Program requests the
-    list, then the service returns the sorted list within one second.
-    """
     for i in range(100):
         response = client.post("/favorites", json={
             "source": "PrepTrack",
@@ -282,7 +321,7 @@ def test_performance_100_items_sorted_within_one_second(client):
     items = response.json["items"]
     assert len(items) == 100
  
-    # Confirm the pinned items are grouped first
+    # make sure the pinned items are grouped first too
     pinned_flags = [item["pinned"] for item in items]
     first_unpinned = pinned_flags.index(False)
     assert all(pinned_flags[:first_unpinned])
