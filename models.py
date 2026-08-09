@@ -60,6 +60,7 @@ def is_duplicate(new_item, existing_items):
         for item in existing_items
     )
 
+
 def validate_update(data):
     """
     Checks that the updates requested are a field that we allow to be
@@ -76,5 +77,7 @@ def validate_update(data):
             return None, f"{field} cannot be updated."
         if not isinstance(value, str):
             return None, f"{field} must be a string."
+        if field == "name" and not value.strip():
+            return None, "name must be a non-empty string."
         updates[field] = value.strip()
     return updates, None
